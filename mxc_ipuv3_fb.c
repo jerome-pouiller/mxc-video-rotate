@@ -388,6 +388,7 @@ static int _setup_disp_channel2(struct fb_info *fbi)
 	int fb_stride;
 	unsigned long base;
 	unsigned int fr_xoff, fr_yoff, fr_w, fr_h;
+	ipu_channel_t ipu_ch;
 
 	switch (fbi_to_pixfmt(fbi)) {
 	case IPU_PIX_FMT_YUV420P2:
@@ -419,7 +420,7 @@ static int _setup_disp_channel2(struct fb_info *fbi)
 	}
 	base += fr_yoff * fb_stride + fr_xoff;
 
-	mxc_fbi->cur_ipu_buf = 2;
+	mxc_fbi->cur_ipu_buf = 1;
 	init_completion(&mxc_fbi->flip_complete);
 	/*
 	 * We don't need to wait for vsync at the first time
@@ -435,8 +436,43 @@ static int _setup_disp_channel2(struct fb_info *fbi)
 		complete(&mxc_fbi->alpha_flip_complete);
 	}
 
+	if (fbi->var.rotate > IPU_ROTATE_VERT_FLIP && mxc_fbi->ipu_ch == MEM_BG_SYNC) {
+		fbi->var.accel_flags |= FB_ACCEL_DOUBLE_FLAG;
+		retval = ipu_init_channel_buffer(mxc_fbi->ipu,
+				MEM_ROT_VF_MEM, IPU_OUTPUT_BUFFER,
+				fbi_to_pixfmt(fbi),
+				fbi->var.yres, fbi->var.xres,
+				fbi->var.yres,
+				IPU_ROTATE_NONE,
+				mxc_fbi->bg_phy_addr0,
+				mxc_fbi->bg_phy_addr1,
+				0,
+				0, 0);
+		if (retval) {
+			dev_err(fbi->device, "ipu_init_channel_buffer error %d\n", retval);
+			return retval;
+		}
+		retval = ipu_init_channel_buffer(mxc_fbi->ipu,
+				mxc_fbi->ipu_ch, IPU_INPUT_BUFFER,
+				fbi_to_pixfmt(fbi),
+				fbi->var.yres, fbi->var.xres,
+				fbi->var.yres,
+				IPU_ROTATE_NONE,
+				mxc_fbi->bg_phy_addr0,
+				mxc_fbi->bg_phy_addr1,
+				0,
+				0, 0);
+		if (retval) {
+			dev_err(fbi->device, "ipu_init_channel_buffer error %d\n", retval);
+			return retval;
+		}
+		ipu_ch = MEM_ROT_VF_MEM;
+	} else {
+		ipu_ch = mxc_fbi->ipu_ch;
+	}
+
 	retval = ipu_init_channel_buffer(mxc_fbi->ipu,
-					 mxc_fbi->ipu_ch, IPU_INPUT_BUFFER,
+					 ipu_ch, IPU_INPUT_BUFFER,
 					 fbi_to_pixfmt(fbi),
 					 fbi->var.xres, fbi->var.yres,
 					 fb_stride,
@@ -453,7 +489,7 @@ static int _setup_disp_channel2(struct fb_info *fbi)
 	}
 
 	/* update u/v offset */
-	ipu_update_channel_offset(mxc_fbi->ipu, mxc_fbi->ipu_ch,
+	ipu_update_channel_offset(mxc_fbi->ipu, ipu_ch,
 			IPU_INPUT_BUFFER,
 			fbi_to_pixfmt(fbi),
 			fr_w,
@@ -1588,7 +1624,7 @@ mxcfb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
 	}
 
 	++mxc_fbi->cur_ipu_buf;
-	mxc_fbi->cur_ipu_buf %= 3;
+	mxc_fbi->cur_ipu_buf %= 2;
 	mxc_fbi->cur_ipu_alpha_buf = !mxc_fbi->cur_ipu_alpha_buf;
 
 	dev_dbg(info->device, "Updating SDC %s buf %d address=0x%08lX\n",
