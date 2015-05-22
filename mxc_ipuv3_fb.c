@@ -81,6 +81,11 @@ struct mxcfb_info {
 	void *alpha_virt_addr0;
 	void *alpha_virt_addr1;
 	uint32_t alpha_mem_len;
+	dma_addr_t bg_phy_addr0;
+	dma_addr_t bg_phy_addr1;
+	void *bg_virt_addr0;
+	void *bg_virt_addr1;
+	uint32_t bg_mem_len;
 	uint32_t ipu_ch_irq;
 	uint32_t ipu_ch_nf_irq;
 	uint32_t ipu_alp_ch_irq;
@@ -1818,6 +1823,8 @@ static int mxcfb_resume(struct platform_device *pdev)
  */
 static int mxcfb_map_video_memory(struct fb_info *fbi)
 {
+	struct mxcfb_info *mxcfbi = (struct mxcfb_info *)fbi->par;
+
 	if (fbi->fix.smem_len < fbi->var.yres_virtual * fbi->fix.line_length)
 		fbi->fix.smem_len = fbi->var.yres_virtual *
 				    fbi->fix.line_length;
@@ -1832,11 +1839,33 @@ static int mxcfb_map_video_memory(struct fb_info *fbi)
 		fbi->fix.smem_start = 0;
 		return -EBUSY;
 	}
-
 	dev_dbg(fbi->device, "allocated fb @ paddr=0x%08X, size=%d.\n",
 		(uint32_t) fbi->fix.smem_start, fbi->fix.smem_len);
 
 	fbi->screen_size = fbi->fix.smem_len;
+
+	if (mxcfbi->ipu_ch == MEM_BG_SYNC && fbi->var.rotate > IPU_ROTATE_VERT_FLIP) {
+		mxcfbi->bg_mem_len = fbi->var.yres_virtual * fbi->fix.line_length ;
+		mxcfbi->bg_virt_addr0 = dma_alloc_writecombine(fbi->device,
+				mxcfbi->bg_mem_len,
+				&mxcfbi->bg_phy_addr0,
+				GFP_DMA | GFP_KERNEL);
+		if (mxcfbi->bg_virt_addr0 == 0) {
+			dev_err(fbi->device, "Unable to allocate framebuffer memory\n");
+			return -EBUSY;
+		}
+		dev_dbg(fbi->device, "allocated fb @ paddr=0x%08X, size=%d.\n", mxcfbi->bg_phy_addr0, mxcfbi->bg_mem_len);
+
+		mxcfbi->bg_virt_addr1 = dma_alloc_writecombine(fbi->device,
+				mxcfbi->bg_mem_len,
+				&mxcfbi->bg_phy_addr1,
+				GFP_DMA | GFP_KERNEL);
+		if (mxcfbi->bg_virt_addr1 == 0) {
+			dev_err(fbi->device, "Unable to allocate framebuffer memory\n");
+			return -EBUSY;
+		}
+		dev_dbg(fbi->device, "allocated fb @ paddr=0x%08X, size=%d.\n", mxcfbi->bg_phy_addr1, mxcfbi->bg_mem_len);
+	}
 
 	/* Clear the screen */
 	memset((char *)fbi->screen_base, 0, fbi->fix.smem_len);
@@ -1853,6 +1882,20 @@ static int mxcfb_map_video_memory(struct fb_info *fbi)
  */
 static int mxcfb_unmap_video_memory(struct fb_info *fbi)
 {
+	struct mxcfb_info *mxcfbi = (struct mxcfb_info *)fbi->par;
+
+	if (mxcfbi->bg_virt_addr0) {
+		dma_free_writecombine(fbi->device,  mxcfbi->bg_mem_len, mxcfbi->bg_virt_addr0, mxcfbi->bg_phy_addr0);
+		mxcfbi->bg_virt_addr0 = 0;
+		mxcfbi->bg_phy_addr0 = 0;
+	}
+	if (mxcfbi->bg_virt_addr1) {
+		dma_free_writecombine(fbi->device,  mxcfbi->bg_mem_len, mxcfbi->bg_virt_addr1, mxcfbi->bg_phy_addr1);
+		mxcfbi->bg_virt_addr1 = 0;
+		mxcfbi->bg_phy_addr1 = 0;
+	}
+	mxcfbi->bg_mem_len = 0;
+
 	dma_free_writecombine(fbi->device, fbi->fix.smem_len,
 			      fbi->screen_base, fbi->fix.smem_start);
 	fbi->screen_base = 0;
