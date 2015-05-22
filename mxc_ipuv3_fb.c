@@ -1,5 +1,6 @@
 /*
  * Copyright 2004-2014 Freescale Semiconductor, Inc. All Rights Reserved.
+ * Copyright 2015 Jérôme Pouiller <j.pouiller@sysmic.fr>. All Rights Reserved.
  */
 
 /*
