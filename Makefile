@@ -15,3 +15,4 @@ install: modules_install
 modules modules_install help clean:
 	$(MAKE) -C $(KDIR) M=$(shell pwd) $@
 
+test_fb: test_fb.o
