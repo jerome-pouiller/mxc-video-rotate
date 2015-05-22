@@ -1,0 +1,14 @@
+iMX display rotate patch
+========================
+
+Generate a patch
+----------------
+
+It may be more convenient to patch freescale kernel instead of make an external
+module. You can generate patch for freescale kernel using:
+
+     git diff original mxc_ipuv3_fb.c > 0001-add-support-for-screen-rotation.patch
+
+Change file paths in patch header in order to comply with your build
+environnement.
+
