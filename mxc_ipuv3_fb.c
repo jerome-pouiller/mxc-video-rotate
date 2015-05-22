@@ -375,6 +375,8 @@ static int _setup_disp_channel1(struct fb_info *fbi)
 			params.mem_dp_bg_sync.alpha_chan_en = true;
 	}
 	ipu_init_channel(mxc_fbi->ipu, mxc_fbi->ipu_ch, &params);
+	if (mxc_fbi->ipu_ch == MEM_BG_SYNC && fbi->var.rotate > IPU_ROTATE_VERT_FLIP)
+		ipu_init_channel(mxc_fbi->ipu, MEM_ROT_VF_MEM, NULL);
 
 	return 0;
 }
@@ -561,6 +563,8 @@ static int mxcfb_set_par(struct fb_info *fbi)
 	ipu_disable_irq(mxc_fbi->ipu, mxc_fbi->ipu_ch_irq);
 	ipu_clear_irq(mxc_fbi->ipu, mxc_fbi->ipu_ch_nf_irq);
 	ipu_disable_irq(mxc_fbi->ipu, mxc_fbi->ipu_ch_nf_irq);
+	if (mxc_fbi->ipu_ch == MEM_BG_SYNC)
+		ipu_uninit_channel(mxc_fbi->ipu, MEM_ROT_VF_MEM);
 	ipu_disable_channel(mxc_fbi->ipu, mxc_fbi->ipu_ch, true);
 	ipu_uninit_channel(mxc_fbi->ipu, mxc_fbi->ipu_ch);
 
