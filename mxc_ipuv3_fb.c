@@ -600,11 +600,22 @@ static int mxcfb_set_par(struct fb_info *fbi)
 
 	ipu_clear_irq(mxc_fbi->ipu, mxc_fbi->ipu_ch_irq);
 	ipu_disable_irq(mxc_fbi->ipu, mxc_fbi->ipu_ch_irq);
+	ipu_free_irq(mxc_fbi->ipu, mxc_fbi->ipu_ch_irq, fbi);
+	if (mxc_fbi->ipu_ch == MEM_BG_SYNC && fbi->var.rotate > IPU_ROTATE_VERT_FLIP) {
+		if (ipu_request_irq(mxc_fbi->ipu, mxc_fbi->ipu_ch_irq,
+					mxcfb_rot_irq_handler, 0, MXCFB_NAME, fbi) != 0) {
+			dev_err(fbi->device, "error registering eof irq handler.\n");
+		}
+	} else {
+		if (ipu_request_irq(mxc_fbi->ipu, mxc_fbi->ipu_ch_irq,
+					mxcfb_irq_handler, IPU_IRQF_ONESHOT, MXCFB_NAME, fbi) != 0) {
+			dev_err(fbi->device, "error registering eof irq handler.\n");
+		}
+	}
+	ipu_disable_irq(mxc_fbi->ipu, mxc_fbi->ipu_ch_irq);
 	ipu_clear_irq(mxc_fbi->ipu, mxc_fbi->ipu_ch_nf_irq);
 	ipu_disable_irq(mxc_fbi->ipu, mxc_fbi->ipu_ch_nf_irq);
 	if (mxc_fbi->ipu_ch == MEM_BG_SYNC) {
-		ipu_clear_irq(mxc_fbi->ipu, IPU_IRQ_PRP_VF_ROT_OUT_EOF);
-		ipu_disable_irq(mxc_fbi->ipu, IPU_IRQ_PRP_VF_ROT_OUT_EOF);
 		if (mxc_fbi->rotate_channel_enabled)
 			ipu_unlink_channels(mxc_fbi->ipu, MEM_ROT_VF_MEM, mxc_fbi->ipu_ch);
 		mxc_fbi->rotate_channel_enabled = false;
@@ -776,8 +787,8 @@ static int mxcfb_set_par(struct fb_info *fbi)
 	}
 
 	if (mxc_fbi->ipu_ch == MEM_BG_SYNC && fbi->var.rotate > IPU_ROTATE_VERT_FLIP) {
-		ipu_clear_irq(mxc_fbi->ipu, IPU_IRQ_PRP_VF_ROT_OUT_EOF);
-		ipu_enable_irq(mxc_fbi->ipu, IPU_IRQ_PRP_VF_ROT_OUT_EOF);
+		ipu_clear_irq(mxc_fbi->ipu, mxc_fbi->ipu_ch_irq);
+		ipu_enable_irq(mxc_fbi->ipu, mxc_fbi->ipu_ch_irq);
 		retval = ipu_link_channels(mxc_fbi->ipu, MEM_ROT_VF_MEM, mxc_fbi->ipu_ch);
 		if (retval)
 			dev_err(fbi->device, "ipu_link_channel error %d\n", retval);
@@ -1651,14 +1662,16 @@ mxcfb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
 		return -ETIMEDOUT;
 	}
 
-	++mxc_fbi->cur_ipu_buf;
-	mxc_fbi->cur_ipu_buf %= 2;
 	mxc_fbi->cur_ipu_alpha_buf = !mxc_fbi->cur_ipu_alpha_buf;
 
-	if (mxc_fbi->ipu_ch == MEM_BG_SYNC && info->var.rotate > IPU_ROTATE_VERT_FLIP)
-	    ipu_ch = MEM_ROT_VF_MEM;
-	else
-	    ipu_ch = mxc_fbi->ipu_ch;
+	if (mxc_fbi->ipu_ch == MEM_BG_SYNC && info->var.rotate > IPU_ROTATE_VERT_FLIP) {
+		ipu_ch = MEM_ROT_VF_MEM;
+		mxc_fbi->cur_ipu_buf = 1 - buffer_num;
+	} else {
+		ipu_ch = mxc_fbi->ipu_ch;
+		++mxc_fbi->cur_ipu_buf;
+		mxc_fbi->cur_ipu_buf %= 2;
+	}
 
 	dev_dbg(info->device, "Updating SDC %s buf %d address=0x%08lX\n",
 		info->fix.id, mxc_fbi->cur_ipu_buf, base);
@@ -1687,14 +1700,12 @@ mxcfb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
 				fr_yoff,
 				fr_xoff);
 
-		ipu_select_buffer(mxc_fbi->ipu, ipu_ch, IPU_INPUT_BUFFER,
-				  mxc_fbi->cur_ipu_buf);
-		if (ipu_ch == MEM_ROT_VF_MEM) {
-		    ipu_select_buffer(mxc_fbi->ipu, ipu_ch, IPU_OUTPUT_BUFFER, 0);
-		    ipu_select_buffer(mxc_fbi->ipu, ipu_ch, IPU_OUTPUT_BUFFER, 1);
+		if (ipu_ch != MEM_ROT_VF_MEM) {
+			ipu_select_buffer(mxc_fbi->ipu, ipu_ch, IPU_INPUT_BUFFER,
+					  mxc_fbi->cur_ipu_buf);
+			ipu_clear_irq(mxc_fbi->ipu, mxc_fbi->ipu_ch_irq);
+			ipu_enable_irq(mxc_fbi->ipu, mxc_fbi->ipu_ch_irq);
 		}
-		ipu_clear_irq(mxc_fbi->ipu, mxc_fbi->ipu_ch_irq);
-		ipu_enable_irq(mxc_fbi->ipu, mxc_fbi->ipu_ch_irq);
 	} else {
 		dev_err(info->device,
 			"Error updating SDC buf %d to address=0x%08lX, "
@@ -1815,6 +1826,7 @@ static irqreturn_t mxcfb_rot_irq_handler(int irq, void *dev_id)
 	ipu_select_buffer(mxc_fbi->ipu, MEM_ROT_VF_MEM, IPU_INPUT_BUFFER, buffer_num);
 	buffer_num = 1 - buffer_num;
 	ipu_select_buffer(mxc_fbi->ipu, MEM_ROT_VF_MEM, IPU_OUTPUT_BUFFER, buffer_num);
+	complete(&mxc_fbi->flip_complete);
 	return IRQ_HANDLED;
 }
 
@@ -2275,15 +2287,6 @@ static int mxcfb_register(struct fb_info *fbi)
 		goto err0;
 	}
 	ipu_disable_irq(mxcfbi->ipu, mxcfbi->ipu_ch_irq);
-	if (mxcfbi->ipu_ch == MEM_BG_SYNC) {
-		if (ipu_request_irq(mxcfbi->ipu, IPU_IRQ_PRP_VF_ROT_OUT_EOF,
-					mxcfb_rot_irq_handler, 0, MXCFB_NAME, fbi) != 0) {
-			dev_err(fbi->device, "Error registering ROT irq handler.\n");
-			ret = -EBUSY;
-			goto err1b;
-		}
-		ipu_disable_irq(mxcfbi->ipu, IPU_IRQ_PRP_VF_ROT_OUT_EOF);
-	}
 	if (ipu_request_irq(mxcfbi->ipu, mxcfbi->ipu_ch_nf_irq,
 		mxcfb_nf_irq_handler, IPU_IRQF_ONESHOT, MXCFB_NAME, fbi) != 0) {
 		dev_err(fbi->device, "Error registering NFACK irq handler.\n");
@@ -2361,8 +2364,6 @@ err3:
 	if (mxcfbi->ipu_alp_ch_irq != -1)
 		ipu_free_irq(mxcfbi->ipu, mxcfbi->ipu_alp_ch_irq, fbi);
 err2:
-	ipu_free_irq(mxcfbi->ipu, IPU_IRQ_PRP_VF_ROT_OUT_EOF, fbi);
-err1b:
 	ipu_free_irq(mxcfbi->ipu, mxcfbi->ipu_ch_nf_irq, fbi);
 err1:
 	ipu_free_irq(mxcfbi->ipu, mxcfbi->ipu_ch_irq, fbi);
@@ -2380,7 +2381,6 @@ static void mxcfb_unregister(struct fb_info *fbi)
 		ipu_free_irq(mxcfbi->ipu, mxcfbi->ipu_ch_irq, fbi);
 	if (mxcfbi->ipu_ch_nf_irq)
 		ipu_free_irq(mxcfbi->ipu, mxcfbi->ipu_ch_nf_irq, fbi);
-	ipu_free_irq(mxcfbi->ipu, IPU_IRQ_PRP_VF_ROT_OUT_EOF, fbi);
 
 	unregister_framebuffer(fbi);
 }
