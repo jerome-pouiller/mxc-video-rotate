@@ -679,7 +679,8 @@ static int mxcfb_set_par(struct fb_info *fbi)
 
 		if (ipu_init_sync_panel(mxc_fbi->ipu, mxc_fbi->ipu_di,
 					(PICOS2KHZ(fbi->var.pixclock)) * 1000UL,
-					fbi->var.xres, fbi->var.yres,
+					(fbi->var.rotate > IPU_ROTATE_VERT_FLIP) ? fbi->var.yres : fbi->var.xres,
+					(fbi->var.rotate > IPU_ROTATE_VERT_FLIP) ? fbi->var.xres : fbi->var.yres,
 					out_pixel_fmt,
 					fbi->var.left_margin,
 					fbi->var.hsync_len,
