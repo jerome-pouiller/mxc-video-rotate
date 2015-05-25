@@ -325,7 +325,6 @@ static struct fb_info *found_registered_fb(ipu_channel_t ipu_ch, int ipu_id)
 	return fbi;
 }
 
-static int buffer_num = 0;
 static irqreturn_t mxcfb_irq_handler(int irq, void *dev_id);
 static irqreturn_t mxcfb_rot_irq_handler(int irq, void *dev_id);
 static irqreturn_t mxcfb_nf_irq_handler(int irq, void *dev_id);
@@ -796,7 +795,7 @@ static int mxcfb_set_par(struct fb_info *fbi)
 		retval = ipu_enable_channel(mxc_fbi->ipu, MEM_ROT_VF_MEM);
 		if (retval)
 			dev_err(fbi->device, "ipu_enable_channel error %d\n", retval);
-		buffer_num = 0;
+		mxc_fbi->cur_ipu_buf = 0;
 		ipu_select_buffer(mxc_fbi->ipu, MEM_ROT_VF_MEM, IPU_INPUT_BUFFER, 0);
 		ipu_select_buffer(mxc_fbi->ipu, MEM_ROT_VF_MEM, IPU_INPUT_BUFFER, 1);
 		ipu_select_buffer(mxc_fbi->ipu, MEM_ROT_VF_MEM, IPU_OUTPUT_BUFFER, 0);
@@ -1666,7 +1665,6 @@ mxcfb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
 
 	if (mxc_fbi->ipu_ch == MEM_BG_SYNC && info->var.rotate > IPU_ROTATE_VERT_FLIP) {
 		ipu_ch = MEM_ROT_VF_MEM;
-		mxc_fbi->cur_ipu_buf = 1 - buffer_num;
 	} else {
 		ipu_ch = mxc_fbi->ipu_ch;
 		++mxc_fbi->cur_ipu_buf;
@@ -1677,7 +1675,7 @@ mxcfb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
 		info->fix.id, mxc_fbi->cur_ipu_buf, base);
 
 	if (ipu_update_channel_buffer(mxc_fbi->ipu, ipu_ch, IPU_INPUT_BUFFER,
-				      mxc_fbi->cur_ipu_buf, base) == 0) {
+				      1 - mxc_fbi->cur_ipu_buf, base) == 0) {
 		/* Update the DP local alpha buffer only for graphic plane */
 		if (loc_alpha_en && mxc_graphic_fbi == mxc_fbi &&
 		    ipu_update_channel_buffer(mxc_graphic_fbi->ipu, mxc_graphic_fbi->ipu_ch,
@@ -1823,9 +1821,9 @@ static irqreturn_t mxcfb_rot_irq_handler(int irq, void *dev_id)
 	struct fb_info *fbi = dev_id;
 	struct mxcfb_info *mxc_fbi = fbi->par;
 
-	ipu_select_buffer(mxc_fbi->ipu, MEM_ROT_VF_MEM, IPU_INPUT_BUFFER, buffer_num);
-	buffer_num = 1 - buffer_num;
-	ipu_select_buffer(mxc_fbi->ipu, MEM_ROT_VF_MEM, IPU_OUTPUT_BUFFER, buffer_num);
+	ipu_select_buffer(mxc_fbi->ipu, MEM_ROT_VF_MEM, IPU_INPUT_BUFFER, mxc_fbi->cur_ipu_buf);
+	mxc_fbi->cur_ipu_buf = 1 - mxc_fbi->cur_ipu_buf;
+	ipu_select_buffer(mxc_fbi->ipu, MEM_ROT_VF_MEM, IPU_OUTPUT_BUFFER, mxc_fbi->cur_ipu_buf);
 	complete(&mxc_fbi->flip_complete);
 	return IRQ_HANDLED;
 }
