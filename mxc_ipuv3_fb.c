@@ -76,6 +76,7 @@ struct mxcfb_info {
 	bool alpha_chan_en;
 	bool late_init;
 	bool first_set_par;
+	int rotate_channel_enabled;
 	dma_addr_t alpha_phy_addr0;
 	dma_addr_t alpha_phy_addr1;
 	void *alpha_virt_addr0;
@@ -599,8 +600,13 @@ static int mxcfb_set_par(struct fb_info *fbi)
 	ipu_disable_irq(mxc_fbi->ipu, mxc_fbi->ipu_ch_irq);
 	ipu_clear_irq(mxc_fbi->ipu, mxc_fbi->ipu_ch_nf_irq);
 	ipu_disable_irq(mxc_fbi->ipu, mxc_fbi->ipu_ch_nf_irq);
-	if (mxc_fbi->ipu_ch == MEM_BG_SYNC)
+	if (mxc_fbi->ipu_ch == MEM_BG_SYNC) {
+		if (mxc_fbi->rotate_channel_enabled)
+			ipu_unlink_channels(mxc_fbi->ipu, MEM_ROT_VF_MEM, mxc_fbi->ipu_ch);
+		mxc_fbi->rotate_channel_enabled = 0;
+		ipu_disable_channel(mxc_fbi->ipu, MEM_ROT_VF_MEM, true);
 		ipu_uninit_channel(mxc_fbi->ipu, MEM_ROT_VF_MEM);
+	}
 	ipu_disable_channel(mxc_fbi->ipu, mxc_fbi->ipu_ch, true);
 	ipu_uninit_channel(mxc_fbi->ipu, mxc_fbi->ipu_ch);
 
@@ -763,6 +769,20 @@ static int mxcfb_set_par(struct fb_info *fbi)
 			ipu_uninit_channel(mxc_fbi->ipu, mxc_fbi->ipu_ch);
 			return retval;
 		}
+	}
+
+	if (mxc_fbi->ipu_ch == MEM_BG_SYNC && fbi->var.rotate > IPU_ROTATE_VERT_FLIP) {
+		retval = ipu_link_channels(mxc_fbi->ipu, MEM_ROT_VF_MEM, mxc_fbi->ipu_ch);
+		if (retval)
+			dev_err(fbi->device, "ipu_link_channel error %d\n", retval);
+		mxc_fbi->rotate_channel_enabled = 1;
+		retval = ipu_enable_channel(mxc_fbi->ipu, MEM_ROT_VF_MEM);
+		if (retval)
+			dev_err(fbi->device, "ipu_enable_channel error %d\n", retval);
+		ipu_select_buffer(mxc_fbi->ipu, MEM_ROT_VF_MEM, IPU_INPUT_BUFFER, 0);
+		ipu_select_buffer(mxc_fbi->ipu, MEM_ROT_VF_MEM, IPU_INPUT_BUFFER, 1);
+		ipu_select_buffer(mxc_fbi->ipu, MEM_ROT_VF_MEM, IPU_OUTPUT_BUFFER, 0);
+		ipu_select_buffer(mxc_fbi->ipu, MEM_ROT_VF_MEM, IPU_OUTPUT_BUFFER, 1);
 	}
 
 	ipu_enable_channel(mxc_fbi->ipu, mxc_fbi->ipu_ch);
