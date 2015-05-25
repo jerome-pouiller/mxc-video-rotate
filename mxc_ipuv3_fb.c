@@ -2239,6 +2239,13 @@ static int mxcfb_option_setup(struct platform_device *pdev, struct fb_info *fbi)
 			if (fb_pix_fmt)
 				pixfmt_to_var(fb_pix_fmt, &fbi->var);
 		} else if (!strncmp(opt, "rotate=", 7)) {
+			// Note you can rotate display during runtime using:
+			//     vinfo.rotate = 4;
+			//     vinfo.xres = 240;
+			//     vinfo.yres = 320;
+			//     vinfo.xres_virtual = vinfo.xres;
+			//     vinfo.yres_virtual = vinfo.yres;
+			//     ioctl(fbfd, FBIOPUT_VSCREENINFO, &vinfo);
 			fbi->var.rotate = simple_strtoul(opt + 7, NULL, 0);
 		} else
 			fb_mode_str = opt;
