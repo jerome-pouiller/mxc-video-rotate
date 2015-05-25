@@ -463,7 +463,7 @@ static int _setup_disp_channel2(struct fb_info *fbi)
 						 IPU_PIX_FMT_GENERIC,
 						 fbi->var.xres, fbi->var.yres,
 						 fbi->var.xres,
-						 fbi->var.rotate,
+						 (fbi->var.rotate > IPU_ROTATE_VERT_FLIP) ? IPU_ROTATE_NONE : fbi->var.rotate,
 						 mxc_fbi->alpha_phy_addr1,
 						 mxc_fbi->alpha_phy_addr0,
 						 0,
