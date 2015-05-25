@@ -2622,6 +2622,8 @@ static int mxcfb_probe(struct platform_device *pdev)
 		goto init_dispdrv_failed;
 
 	if (fbi->var.rotate > IPU_ROTATE_VERT_FLIP) {
+		if (fbi->var.xres > 1024 ||  fbi->var.yres > 1024)
+			dev_err(&pdev->dev, "Rotate resolution > 1024x1024 is not yet supported");
 		tmp = fbi->var.xres;
 		fbi->var.xres = fbi->var.yres;
 		fbi->var.yres = tmp;
