@@ -1557,6 +1557,7 @@ mxcfb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
 	int fb_stride;
 	int i;
 	int ret;
+	ipu_channel_t ipu_ch;
 
 	/* no pan display during fb blank */
 	if (mxc_fbi->ipu_ch == MEM_FG_SYNC) {
@@ -1647,10 +1648,15 @@ mxcfb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
 	mxc_fbi->cur_ipu_buf %= 2;
 	mxc_fbi->cur_ipu_alpha_buf = !mxc_fbi->cur_ipu_alpha_buf;
 
+	if (mxc_fbi->ipu_ch == MEM_BG_SYNC && info->var.rotate > IPU_ROTATE_VERT_FLIP)
+	    ipu_ch = MEM_ROT_VF_MEM;
+	else
+	    ipu_ch = mxc_fbi->ipu_ch;
+
 	dev_dbg(info->device, "Updating SDC %s buf %d address=0x%08lX\n",
 		info->fix.id, mxc_fbi->cur_ipu_buf, base);
 
-	if (ipu_update_channel_buffer(mxc_fbi->ipu, mxc_fbi->ipu_ch, IPU_INPUT_BUFFER,
+	if (ipu_update_channel_buffer(mxc_fbi->ipu, ipu_ch, IPU_INPUT_BUFFER,
 				      mxc_fbi->cur_ipu_buf, base) == 0) {
 		/* Update the DP local alpha buffer only for graphic plane */
 		if (loc_alpha_en && mxc_graphic_fbi == mxc_fbi &&
@@ -1664,7 +1670,7 @@ mxcfb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
 		}
 
 		/* update u/v offset */
-		ipu_update_channel_offset(mxc_fbi->ipu, mxc_fbi->ipu_ch,
+		ipu_update_channel_offset(mxc_fbi->ipu, ipu_ch,
 				IPU_INPUT_BUFFER,
 				fbi_to_pixfmt(info),
 				fr_w,
@@ -1674,8 +1680,12 @@ mxcfb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
 				fr_yoff,
 				fr_xoff);
 
-		ipu_select_buffer(mxc_fbi->ipu, mxc_fbi->ipu_ch, IPU_INPUT_BUFFER,
+		ipu_select_buffer(mxc_fbi->ipu, ipu_ch, IPU_INPUT_BUFFER,
 				  mxc_fbi->cur_ipu_buf);
+		if (ipu_ch == MEM_ROT_VF_MEM) {
+		    ipu_select_buffer(mxc_fbi->ipu, ipu_ch, IPU_OUTPUT_BUFFER, 0);
+		    ipu_select_buffer(mxc_fbi->ipu, ipu_ch, IPU_OUTPUT_BUFFER, 1);
+		}
 		ipu_clear_irq(mxc_fbi->ipu, mxc_fbi->ipu_ch_irq);
 		ipu_enable_irq(mxc_fbi->ipu, mxc_fbi->ipu_ch_irq);
 	} else {
@@ -1683,18 +1693,18 @@ mxcfb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
 			"Error updating SDC buf %d to address=0x%08lX, "
 			"current buf %d, buf0 ready %d, buf1 ready %d, "
 			"buf2 ready %d\n", mxc_fbi->cur_ipu_buf, base,
-			ipu_get_cur_buffer_idx(mxc_fbi->ipu, mxc_fbi->ipu_ch,
+			ipu_get_cur_buffer_idx(mxc_fbi->ipu, ipu_ch,
 					       IPU_INPUT_BUFFER),
-			ipu_check_buffer_ready(mxc_fbi->ipu, mxc_fbi->ipu_ch,
+			ipu_check_buffer_ready(mxc_fbi->ipu, ipu_ch,
 					       IPU_INPUT_BUFFER, 0),
-			ipu_check_buffer_ready(mxc_fbi->ipu, mxc_fbi->ipu_ch,
+			ipu_check_buffer_ready(mxc_fbi->ipu, ipu_ch,
 					       IPU_INPUT_BUFFER, 1),
-			ipu_check_buffer_ready(mxc_fbi->ipu, mxc_fbi->ipu_ch,
+			ipu_check_buffer_ready(mxc_fbi->ipu, ipu_ch,
 					       IPU_INPUT_BUFFER, 2));
 		++mxc_fbi->cur_ipu_buf;
-		mxc_fbi->cur_ipu_buf %= 3;
+		mxc_fbi->cur_ipu_buf %= 2;
 		++mxc_fbi->cur_ipu_buf;
-		mxc_fbi->cur_ipu_buf %= 3;
+		mxc_fbi->cur_ipu_buf %= 2;
 		mxc_fbi->cur_ipu_alpha_buf = !mxc_fbi->cur_ipu_alpha_buf;
 		ipu_clear_irq(mxc_fbi->ipu, mxc_fbi->ipu_ch_irq);
 		ipu_enable_irq(mxc_fbi->ipu, mxc_fbi->ipu_ch_irq);
