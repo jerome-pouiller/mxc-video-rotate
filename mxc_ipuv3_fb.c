@@ -76,7 +76,7 @@ struct mxcfb_info {
 	bool alpha_chan_en;
 	bool late_init;
 	bool first_set_par;
-	int rotate_channel_enabled;
+	bool rotate_channel_enabled;
 	dma_addr_t alpha_phy_addr0;
 	dma_addr_t alpha_phy_addr1;
 	void *alpha_virt_addr0;
@@ -603,7 +603,7 @@ static int mxcfb_set_par(struct fb_info *fbi)
 	if (mxc_fbi->ipu_ch == MEM_BG_SYNC) {
 		if (mxc_fbi->rotate_channel_enabled)
 			ipu_unlink_channels(mxc_fbi->ipu, MEM_ROT_VF_MEM, mxc_fbi->ipu_ch);
-		mxc_fbi->rotate_channel_enabled = 0;
+		mxc_fbi->rotate_channel_enabled = false;
 		ipu_disable_channel(mxc_fbi->ipu, MEM_ROT_VF_MEM, true);
 		ipu_uninit_channel(mxc_fbi->ipu, MEM_ROT_VF_MEM);
 	}
@@ -775,7 +775,7 @@ static int mxcfb_set_par(struct fb_info *fbi)
 		retval = ipu_link_channels(mxc_fbi->ipu, MEM_ROT_VF_MEM, mxc_fbi->ipu_ch);
 		if (retval)
 			dev_err(fbi->device, "ipu_link_channel error %d\n", retval);
-		mxc_fbi->rotate_channel_enabled = 1;
+		mxc_fbi->rotate_channel_enabled = true;
 		retval = ipu_enable_channel(mxc_fbi->ipu, MEM_ROT_VF_MEM);
 		if (retval)
 			dev_err(fbi->device, "ipu_enable_channel error %d\n", retval);
