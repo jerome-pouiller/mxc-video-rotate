@@ -2238,6 +2238,8 @@ static int mxcfb_option_setup(struct platform_device *pdev, struct fb_info *fbi)
 			fb_pix_fmt = bpp_to_pixfmt(pdata->default_bpp);
 			if (fb_pix_fmt)
 				pixfmt_to_var(fb_pix_fmt, &fbi->var);
+		} else if (!strncmp(opt, "rotate=", 7)) {
+			fbi->var.rotate = simple_strtoul(opt + 7, NULL, 0);
 		} else
 			fb_mode_str = opt;
 	}
@@ -2565,6 +2567,7 @@ static int mxcfb_probe(struct platform_device *pdev)
 	struct mxcfb_info *mxcfbi;
 	struct resource *res;
 	int ret = 0;
+	int tmp;
 
 	dev_dbg(&pdev->dev, "%s enter\n", __func__);
 	pdev->id = of_alias_get_id(pdev->dev.of_node, "mxcfb");
@@ -2610,6 +2613,15 @@ static int mxcfb_probe(struct platform_device *pdev)
 	ret = mxcfb_dispdrv_init(pdev, fbi);
 	if (ret < 0)
 		goto init_dispdrv_failed;
+
+	if (fbi->var.rotate > IPU_ROTATE_VERT_FLIP) {
+		tmp = fbi->var.xres;
+		fbi->var.xres = fbi->var.yres;
+		fbi->var.yres = tmp;
+		tmp = fbi->var.xres_virtual;
+		fbi->var.xres_virtual = fbi->var.yres_virtual;
+		fbi->var.yres_virtual = tmp;
+	}
 
 	ret = ipu_test_set_usage(mxcfbi->ipu_id, mxcfbi->ipu_di);
 	if (ret < 0) {
