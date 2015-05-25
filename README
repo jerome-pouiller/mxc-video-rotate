@@ -1,6 +1,42 @@
 iMX display rotate patch
 ========================
 
+How to use it
+-------------
+
+Simplest way is to add "rotate=4" to "video" kernel parameter. For example:
+
+   video=mxcfb0:dev=lcd,UMSH-8065MD-9T,rotate=4
+
+Check IPU_ROTATE_* values (in linux/ipu.h) to choose correct value to pass to 
+"rotate".
+
+You can also change rotation during runtime using FBIOPUT_VSCREENINFO. Note you
+have to change X/Y resolution accordingly:
+
+     vinfo.rotate = 4;
+     vinfo.xres = old_yres;
+     vinfo.yres = old_xres;
+     vinfo.xres_virtual = vinfo.xres;
+     vinfo.yres_virtual = vinfo.yres;
+     ioctl(fbfd, FBIOPUT_VSCREENINFO, &vinfo);
+
+
+Limitations
+-----------
+
+This patch is known to work with simple configuration. We didn't tested
+advanced ioctls provided by original code.
+
+In add, alpha layers are not touched by this patch. It means you will have to
+rotate these layer manually if you use them.
+
+This patch try to not change original IRQ handling too much. Therefore, we
+think tearing may appear if screen refresh is slower than IPU rotation. 
+
+Also notice IPU always refresh screen buffers. It may be annoying if you are 
+concerned with power consumption.
+
 Generate a patch
 ----------------
 
