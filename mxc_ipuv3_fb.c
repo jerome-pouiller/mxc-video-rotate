@@ -424,18 +424,9 @@ static int _setup_disp_channel2(struct fb_info *fbi)
 
 	mxc_fbi->cur_ipu_buf = 1;
 	init_completion(&mxc_fbi->flip_complete);
-	/*
-	 * We don't need to wait for vsync at the first time
-	 * we do pan display after fb is initialized, as IPU will
-	 * switch to the newly selected buffer automatically,
-	 * so we call complete() for both mxc_fbi->flip_complete
-	 * and mxc_fbi->alpha_flip_complete.
-	 */
-	complete(&mxc_fbi->flip_complete);
 	if (mxc_fbi->alpha_chan_en) {
 		mxc_fbi->cur_ipu_alpha_buf = 1;
 		init_completion(&mxc_fbi->alpha_flip_complete);
-		complete(&mxc_fbi->alpha_flip_complete);
 	}
 
 	if (fbi->var.rotate > IPU_ROTATE_VERT_FLIP && mxc_fbi->ipu_ch == MEM_BG_SYNC) {
@@ -470,6 +461,17 @@ static int _setup_disp_channel2(struct fb_info *fbi)
 		}
 		ipu_ch = MEM_ROT_VF_MEM;
 	} else {
+		/*
+		 * We don't need to wait for vsync at the first time
+		 * we do pan display after fb is initialized, as IPU will
+		 * switch to the newly selected buffer automatically,
+		 * so we call complete() for both mxc_fbi->flip_complete
+		 * and mxc_fbi->alpha_flip_complete.
+		 */
+		complete(&mxc_fbi->flip_complete);
+		if (mxc_fbi->alpha_chan_en) {
+			complete(&mxc_fbi->alpha_flip_complete);
+		}
 		ipu_ch = mxc_fbi->ipu_ch;
 	}
 
