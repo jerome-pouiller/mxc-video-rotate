@@ -21,6 +21,12 @@ have to change X/Y resolution accordingly:
      vinfo.yres_virtual = vinfo.yres;
      ioctl(fbfd, FBIOPUT_VSCREENINFO, &vinfo);
 
+This code was based on Linux Freescale 3.10.17 [1]. It have to be adapted to
+work with other versions (especially, it known to not work out of the box with
+3.10.54 and 3.14.28).
+
+
+[1] http://git.freescale.com/git/cgit.cgi/imx/linux-2.6-imx.git
 
 Limitations
 -----------
@@ -32,9 +38,9 @@ In add, alpha layers are not touched by this patch. It means you will have to
 rotate these layer manually if you use them.
 
 This patch try to not change original IRQ handling too much. Therefore, we
-think tearing may appear if screen refresh is slower than IPU rotation. 
+think tearing may appear if screen refresh is slower than IPU rotation.
 
-Also notice IPU always refresh screen buffers. It may be annoying if you are 
+Also notice IPU always refresh screen buffers. It may be annoying if you are
 concerned with power consumption.
 
 Generate a patch
